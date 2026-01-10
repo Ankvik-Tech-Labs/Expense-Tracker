@@ -3,6 +3,7 @@ Benchmark service for fetching index values.
 
 This module fetches benchmark index values (Nifty 50, Sensex).
 """
+
 from typing import Optional, Tuple
 import yfinance as yf
 
@@ -21,7 +22,7 @@ class BenchmarkService:
             ticker = yf.Ticker("^NSEI")
             data = ticker.history(period="1d")
             if not data.empty:
-                return float(data['Close'].iloc[-1])
+                return float(data["Close"].iloc[-1])
         except Exception as e:
             print(f"Error fetching Nifty 50: {e}")
         return None
@@ -37,7 +38,7 @@ class BenchmarkService:
             ticker = yf.Ticker("^BSESN")
             data = ticker.history(period="1d")
             if not data.empty:
-                return float(data['Close'].iloc[-1])
+                return float(data["Close"].iloc[-1])
         except Exception as e:
             print(f"Error fetching Sensex: {e}")
         return None

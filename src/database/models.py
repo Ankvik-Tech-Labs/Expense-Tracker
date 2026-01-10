@@ -3,6 +3,7 @@ Database models for investment tracker.
 
 This module defines the SQLAlchemy ORM models for storing portfolio data.
 """
+
 from datetime import datetime
 from typing import Optional
 
@@ -13,11 +14,13 @@ import enum
 
 class Base(DeclarativeBase):
     """Base class for all database models."""
+
     pass
 
 
 class HoldingType(enum.Enum):
     """Type of investment holding."""
+
     STOCK = "stock"
     MUTUAL_FUND = "mutual_fund"
     US_STOCK = "us_stock"
@@ -42,10 +45,13 @@ class Holding(Base):
         unrealized_pl: Unrealized profit/loss
         unrealized_pl_pct: Unrealized P&L percentage
     """
+
     __tablename__ = "holdings"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    snapshot_date: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    snapshot_date: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, index=True
+    )
     type: Mapped[HoldingType] = mapped_column(SQLEnum(HoldingType), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     symbol: Mapped[Optional[str]] = mapped_column(String(50))
@@ -76,10 +82,13 @@ class Snapshot(Base):
         benchmark_nifty: Nifty 50 value on this date
         benchmark_sensex: Sensex value on this date
     """
+
     __tablename__ = "snapshots"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    snapshot_date: Mapped[datetime] = mapped_column(DateTime, nullable=False, unique=True, index=True)
+    snapshot_date: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, unique=True, index=True
+    )
     total_value: Mapped[float] = mapped_column(Float, nullable=False)
     stocks_value: Mapped[float] = mapped_column(Float, default=0.0)
     mf_value: Mapped[float] = mapped_column(Float, default=0.0)
@@ -105,10 +114,13 @@ class UploadLog(Base):
         status: Upload status (success, error)
         error_message: Error message if upload failed
     """
+
     __tablename__ = "upload_logs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    upload_date: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    upload_date: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.utcnow
+    )
     snapshot_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
     file_type: Mapped[str] = mapped_column(String(50), nullable=False)

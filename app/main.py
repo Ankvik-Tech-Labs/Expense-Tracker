@@ -3,6 +3,7 @@ Investment Tracker V2 - Main Streamlit App.
 
 Portfolio tracking dashboard with real-time pricing and analytics.
 """
+
 import streamlit as st
 
 
@@ -11,11 +12,12 @@ st.set_page_config(
     page_title="Investment Tracker",
     page_icon="📊",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
 )
 
 # Custom CSS
-st.markdown("""
+st.markdown(
+    """
     <style>
     .big-metric {
         font-size: 2rem !important;
@@ -28,7 +30,9 @@ st.markdown("""
         color: #d32f2f;
     }
     </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 # Main page content
 st.title("📊 Investment Tracker")

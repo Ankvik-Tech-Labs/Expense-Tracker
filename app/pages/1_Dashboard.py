@@ -1,4 +1,5 @@
 """Dashboard page with portfolio overview."""
+
 import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
@@ -10,7 +11,7 @@ from src.services.portfolio import (
     get_top_performers,
     get_bottom_performers,
     calculate_asset_allocation,
-    calculate_monthly_changes
+    calculate_monthly_changes,
 )
 from src.services.benchmarks import BenchmarkService
 
@@ -26,12 +27,16 @@ benchmark_service = BenchmarkService()
 holdings_df = repo.get_holdings_df()
 
 if holdings_df.empty:
-    st.warning("No data available. Please upload your holdings data from the Upload page.")
+    st.warning(
+        "No data available. Please upload your holdings data from the Upload page."
+    )
     st.stop()
 
 # Calculate summary
 summary = calculate_portfolio_summary(holdings_df)
-latest_date = holdings_df['snapshot_date'].iloc[0] if not holdings_df.empty else datetime.now()
+latest_date = (
+    holdings_df["snapshot_date"].iloc[0] if not holdings_df.empty else datetime.now()
+)
 
 # KPI Cards
 col1, col2, col3, col4 = st.columns(4)
@@ -40,28 +45,30 @@ with col1:
     st.metric(
         "Total Portfolio",
         f"₹{summary['total_value']:,.2f}",
-        f"{summary['total_pl_pct']:.2f}%"
+        f"{summary['total_pl_pct']:.2f}%",
     )
 
 with col2:
     st.metric(
         "Stocks",
         f"₹{summary['stocks_value']:,.2f}",
-        f"{(summary['stocks_value']/summary['total_value']*100):.1f}%" if summary['total_value'] > 0 else "0%"
+        f"{(summary['stocks_value'] / summary['total_value'] * 100):.1f}%"
+        if summary["total_value"] > 0
+        else "0%",
     )
 
 with col3:
     st.metric(
         "Mutual Funds",
         f"₹{summary['mf_value']:,.2f}",
-        f"{(summary['mf_value']/summary['total_value']*100):.1f}%" if summary['total_value'] > 0 else "0%"
+        f"{(summary['mf_value'] / summary['total_value'] * 100):.1f}%"
+        if summary["total_value"] > 0
+        else "0%",
     )
 
 with col4:
     st.metric(
-        "Total P&L",
-        f"₹{summary['total_pl']:,.2f}",
-        f"{summary['total_pl_pct']:.2f}%"
+        "Total P&L", f"₹{summary['total_pl']:,.2f}", f"{summary['total_pl_pct']:.2f}%"
     )
 
 st.markdown("---")
@@ -75,9 +82,9 @@ with col1:
     if not allocation_df.empty:
         fig = px.pie(
             allocation_df,
-            values='value',
-            names='asset_type',
-            title="Portfolio Distribution"
+            values="value",
+            names="asset_type",
+            title="Portfolio Distribution",
         )
         st.plotly_chart(fig, width="stretch")
 
@@ -85,20 +92,22 @@ with col2:
     st.subheader("Portfolio Trend")
     snapshots_df = repo.get_snapshots_df(limit=12)
     if not snapshots_df.empty:
-        snapshots_df = snapshots_df.sort_values('snapshot_date')
+        snapshots_df = snapshots_df.sort_values("snapshot_date")
         fig = go.Figure()
-        fig.add_trace(go.Scatter(
-            x=snapshots_df['snapshot_date'],
-            y=snapshots_df['total_value'],
-            mode='lines+markers',
-            name='Portfolio Value',
-            line=dict(color='#1f77b4', width=3)
-        ))
+        fig.add_trace(
+            go.Scatter(
+                x=snapshots_df["snapshot_date"],
+                y=snapshots_df["total_value"],
+                mode="lines+markers",
+                name="Portfolio Value",
+                line=dict(color="#1f77b4", width=3),
+            )
+        )
         fig.update_layout(
             title="Portfolio Value Over Time",
             xaxis_title="Date",
             yaxis_title="Value (₹)",
-            hovermode='x unified'
+            hovermode="x unified",
         )
         st.plotly_chart(fig, width="stretch")
 
@@ -111,27 +120,42 @@ with st.expander("📊 Monthly Summary (Last 6 Months)", expanded=False):
         monthly_df = calculate_monthly_changes(snapshots_df)
         if not monthly_df.empty:
             # Sort by date descending for display (most recent first)
-            monthly_df = monthly_df.sort_values('snapshot_date', ascending=False)
+            monthly_df = monthly_df.sort_values("snapshot_date", ascending=False)
 
             # Create display DataFrame
-            display_df = monthly_df[[
-                'month', 'total_value', 'stocks_value', 'mf_value',
-                'mom_change', 'mom_change_pct'
-            ]].copy()
+            display_df = monthly_df[
+                [
+                    "month",
+                    "total_value",
+                    "stocks_value",
+                    "mf_value",
+                    "mom_change",
+                    "mom_change_pct",
+                ]
+            ].copy()
 
-            display_df.columns = ['Month', 'Total Value', 'Stocks', 'Mutual Funds', 'Change', 'Change %']
+            display_df.columns = [
+                "Month",
+                "Total Value",
+                "Stocks",
+                "Mutual Funds",
+                "Change",
+                "Change %",
+            ]
 
             # Format currency columns
-            for col in ['Total Value', 'Stocks', 'Mutual Funds', 'Change']:
+            for col in ["Total Value", "Stocks", "Mutual Funds", "Change"]:
                 display_df[col] = display_df[col].apply(lambda x: f"₹{x:,.2f}")
 
-            display_df['Change %'] = display_df['Change %'].apply(lambda x: f"{x:.2f}%")
+            display_df["Change %"] = display_df["Change %"].apply(lambda x: f"{x:.2f}%")
 
             st.dataframe(display_df, width="stretch", hide_index=True)
 
             st.caption("💡 For detailed monthly analysis, visit the Trends page.")
     else:
-        st.info("No monthly data available yet. Upload data for multiple months to see trends.")
+        st.info(
+            "No monthly data available yet. Upload data for multiple months to see trends."
+        )
 
 st.markdown("---")
 
@@ -145,10 +169,10 @@ with col1:
         for idx, row in top_df.iterrows():
             # Always use "normal" so positive P&L shows green, negative shows red
             st.metric(
-                row['name'][:30],
+                row["name"][:30],
                 f"₹{row['current_value']:,.2f}",
                 f"{row['unrealized_pl_pct']:.2f}%",
-                delta_color="normal"
+                delta_color="normal",
             )
 
 with col2:
@@ -158,10 +182,10 @@ with col2:
         for idx, row in bottom_df.iterrows():
             # Always use "normal" so negative P&L shows red, positive shows green
             st.metric(
-                row['name'][:30],
+                row["name"][:30],
                 f"₹{row['current_value']:,.2f}",
                 f"{row['unrealized_pl_pct']:.2f}%",
-                delta_color="normal"
+                delta_color="normal",
             )
 
 st.markdown("---")

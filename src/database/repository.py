@@ -3,6 +3,7 @@ Database repository for CRUD operations.
 
 This module provides data access methods for the investment tracker.
 """
+
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
@@ -46,7 +47,7 @@ class PortfolioRepository:
         inspector = inspect(self.engine)
 
         # Check if holdings table exists
-        if 'holdings' not in inspector.get_table_names():
+        if "holdings" not in inspector.get_table_names():
             return
 
         # Future migrations can be added here
@@ -73,17 +74,17 @@ class PortfolioRepository:
             for _, row in holdings_df.iterrows():
                 holding = Holding(
                     snapshot_date=snapshot_date,
-                    type=HoldingType(row['type']),
-                    name=row['name'],
-                    symbol=row.get('symbol'),
-                    isin=row.get('isin'),
-                    units=float(row['units']),
-                    avg_price=float(row['avg_price']),
-                    current_price=float(row['current_price']),
-                    invested_value=float(row['invested_value']),
-                    current_value=float(row['current_value']),
-                    unrealized_pl=float(row['unrealized_pl']),
-                    unrealized_pl_pct=float(row['unrealized_pl_pct'])
+                    type=HoldingType(row["type"]),
+                    name=row["name"],
+                    symbol=row.get("symbol"),
+                    isin=row.get("isin"),
+                    units=float(row["units"]),
+                    avg_price=float(row["avg_price"]),
+                    current_price=float(row["current_price"]),
+                    invested_value=float(row["invested_value"]),
+                    current_value=float(row["current_value"]),
+                    unrealized_pl=float(row["unrealized_pl"]),
+                    unrealized_pl_pct=float(row["unrealized_pl_pct"]),
                 )
                 holdings.append(holding)
 
@@ -130,20 +131,22 @@ class PortfolioRepository:
 
         data = []
         for h in holdings:
-            data.append({
-                'snapshot_date': h.snapshot_date,
-                'type': h.type.value,
-                'name': h.name,
-                'symbol': h.symbol,
-                'isin': h.isin,
-                'units': h.units,
-                'avg_price': h.avg_price,
-                'current_price': h.current_price,
-                'invested_value': h.invested_value,
-                'current_value': h.current_value,
-                'unrealized_pl': h.unrealized_pl,
-                'unrealized_pl_pct': h.unrealized_pl_pct
-            })
+            data.append(
+                {
+                    "snapshot_date": h.snapshot_date,
+                    "type": h.type.value,
+                    "name": h.name,
+                    "symbol": h.symbol,
+                    "isin": h.isin,
+                    "units": h.units,
+                    "avg_price": h.avg_price,
+                    "current_price": h.current_price,
+                    "invested_value": h.invested_value,
+                    "current_value": h.current_value,
+                    "unrealized_pl": h.unrealized_pl,
+                    "unrealized_pl_pct": h.unrealized_pl_pct,
+                }
+            )
 
         return pd.DataFrame(data)
 
@@ -190,18 +193,20 @@ class PortfolioRepository:
 
         data = []
         for s in snapshots:
-            data.append({
-                'snapshot_date': s.snapshot_date,
-                'total_value': s.total_value,
-                'stocks_value': s.stocks_value,
-                'mf_value': s.mf_value,
-                'us_stocks_value': s.us_stocks_value,
-                'total_invested': s.total_invested,
-                'total_pl': s.total_pl,
-                'total_pl_pct': s.total_pl_pct,
-                'benchmark_nifty': s.benchmark_nifty,
-                'benchmark_sensex': s.benchmark_sensex
-            })
+            data.append(
+                {
+                    "snapshot_date": s.snapshot_date,
+                    "total_value": s.total_value,
+                    "stocks_value": s.stocks_value,
+                    "mf_value": s.mf_value,
+                    "us_stocks_value": s.us_stocks_value,
+                    "total_invested": s.total_invested,
+                    "total_pl": s.total_pl,
+                    "total_pl_pct": s.total_pl_pct,
+                    "benchmark_nifty": s.benchmark_nifty,
+                    "benchmark_sensex": s.benchmark_sensex,
+                }
+            )
 
         return pd.DataFrame(data)
 
@@ -257,13 +262,17 @@ class PortfolioRepository:
         """
         with self.get_session() as session:
             # Delete holdings first
-            holdings_stmt = select(Holding).where(Holding.snapshot_date == snapshot_date)
+            holdings_stmt = select(Holding).where(
+                Holding.snapshot_date == snapshot_date
+            )
             holdings = session.execute(holdings_stmt).scalars().all()
             for holding in holdings:
                 session.delete(holding)
 
             # Delete snapshot
-            snapshot_stmt = select(Snapshot).where(Snapshot.snapshot_date == snapshot_date)
+            snapshot_stmt = select(Snapshot).where(
+                Snapshot.snapshot_date == snapshot_date
+            )
             snapshot = session.execute(snapshot_stmt).scalar()
             if snapshot:
                 session.delete(snapshot)
@@ -282,6 +291,31 @@ class PortfolioRepository:
         """
         with self.get_session() as session:
             stmt = select(Holding).where(Holding.snapshot_date == snapshot_date)
+            holdings = session.execute(stmt).scalars().all()
+            count = len(holdings)
+            for holding in holdings:
+                session.delete(holding)
+            session.commit()
+            return count
+
+    def delete_holdings_by_type(
+        self, snapshot_date: datetime, holding_types: list
+    ) -> int:
+        """
+        Delete holdings of specific types for a snapshot date.
+
+        Parameters:
+            snapshot_date: Date of holdings to delete
+            holding_types: List of holding types to delete (e.g., ['stock', 'us_stock'])
+
+        Returns:
+            Number of holdings deleted
+        """
+        with self.get_session() as session:
+            stmt = select(Holding).where(
+                Holding.snapshot_date == snapshot_date,
+                Holding.type.in_([HoldingType(ht) for ht in holding_types]),
+            )
             holdings = session.execute(stmt).scalars().all()
             count = len(holdings)
             for holding in holdings:

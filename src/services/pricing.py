@@ -3,6 +3,7 @@ Pricing service for fetching real-time prices.
 
 This module fetches prices from Yahoo Finance and other sources.
 """
+
 from typing import Dict, Optional
 import time
 
@@ -49,7 +50,7 @@ class PricingService:
             data = ticker.history(period="1d")
 
             if not data.empty:
-                price = float(data['Close'].iloc[-1])
+                price = float(data["Close"].iloc[-1])
                 # Update cache
                 self.cache[cache_key] = price
                 self.cache_timestamp[cache_key] = time.time()
@@ -60,7 +61,9 @@ class PricingService:
 
         return None
 
-    def get_bulk_stock_prices(self, symbols: list, exchange: str = "NSE") -> Dict[str, float]:
+    def get_bulk_stock_prices(
+        self, symbols: list, exchange: str = "NSE"
+    ) -> Dict[str, float]:
         """
         Get prices for multiple stocks.
 
@@ -79,6 +82,36 @@ class PricingService:
 
         return prices
 
+    def get_usd_to_inr_rate(self) -> Optional[float]:
+        """
+        Get current USD to INR exchange rate.
+
+        Returns:
+            Current USD/INR rate or None if failed
+        """
+        # Check cache
+        cache_key = "USDINR"
+        if cache_key in self.cache:
+            if time.time() - self.cache_timestamp[cache_key] < self.cache_duration:
+                return self.cache[cache_key]
+
+        try:
+            # Yahoo Finance uses USDINR=X for USD to INR forex rate
+            ticker = yf.Ticker("USDINR=X")
+            data = ticker.history(period="1d")
+
+            if not data.empty:
+                rate = float(data["Close"].iloc[-1])
+                # Update cache
+                self.cache[cache_key] = rate
+                self.cache_timestamp[cache_key] = time.time()
+                return rate
+
+        except Exception as e:
+            print(f"Error fetching USD/INR rate: {e}")
+            # Fallback to approximate rate if API fails
+            return 83.0  # Approximate fallback rate
+
     def update_holdings_prices(self, holdings_df: pd.DataFrame) -> pd.DataFrame:
         """
         Update current prices in holdings DataFrame.
@@ -92,16 +125,20 @@ class PricingService:
         df = holdings_df.copy()
 
         for idx, row in df.iterrows():
-            if row['type'] == 'stock':
+            if row["type"] == "stock":
                 # Extract symbol from ISIN or name
-                symbol = self._extract_symbol_from_name(row['name'])
+                symbol = self._extract_symbol_from_name(row["name"])
                 if symbol:
                     price = self.get_stock_price(symbol)
                     if price:
-                        df.at[idx, 'current_price'] = price
-                        df.at[idx, 'current_value'] = price * row['units']
-                        df.at[idx, 'unrealized_pl'] = df.at[idx, 'current_value'] - row['invested_value']
-                        df.at[idx, 'unrealized_pl_pct'] = (df.at[idx, 'unrealized_pl'] / row['invested_value']) * 100
+                        df.at[idx, "current_price"] = price
+                        df.at[idx, "current_value"] = price * row["units"]
+                        df.at[idx, "unrealized_pl"] = (
+                            df.at[idx, "current_value"] - row["invested_value"]
+                        )
+                        df.at[idx, "unrealized_pl_pct"] = (
+                            df.at[idx, "unrealized_pl"] / row["invested_value"]
+                        ) * 100
 
         return df
 
@@ -117,27 +154,27 @@ class PricingService:
         """
         # Map common names to symbols
         symbol_map = {
-            'RELIANCE': 'RELIANCE',
-            'TCS': 'TCS',
-            'HDFC BANK': 'HDFCBANK',
-            'ICICI BANK': 'ICICIBANK',
-            'INFOSYS': 'INFY',
-            'ITC': 'ITC',
-            'HINDUSTAN UNILEVER': 'HINDUNILVR',
-            'BHARTI AIRTEL': 'BHARTIARTL',
-            'KOTAK MAHINDRA BANK': 'KOTAKBANK',
-            'AXIS BANK': 'AXISBANK',
-            'TATA STEEL': 'TATASTEEL',
-            'TATA POWER': 'TATAPOWER',
-            'VEDANTA': 'VEDL',
-            'HINDUSTAN AERONAUTICS': 'HAL',
-            'JUBILANT FOODWORKS': 'JUBLFOOD',
-            'JIO FIN': 'JIOFIN',
-            'LIC': 'LICI',
-            'PARAG DEF': 'PARACABLES',
-            'SIGACHI': 'SIGACHI',
-            'IRFC': 'IRFC',
-            'BSE LIMITED': 'BSE'
+            "RELIANCE": "RELIANCE",
+            "TCS": "TCS",
+            "HDFC BANK": "HDFCBANK",
+            "ICICI BANK": "ICICIBANK",
+            "INFOSYS": "INFY",
+            "ITC": "ITC",
+            "HINDUSTAN UNILEVER": "HINDUNILVR",
+            "BHARTI AIRTEL": "BHARTIARTL",
+            "KOTAK MAHINDRA BANK": "KOTAKBANK",
+            "AXIS BANK": "AXISBANK",
+            "TATA STEEL": "TATASTEEL",
+            "TATA POWER": "TATAPOWER",
+            "VEDANTA": "VEDL",
+            "HINDUSTAN AERONAUTICS": "HAL",
+            "JUBILANT FOODWORKS": "JUBLFOOD",
+            "JIO FIN": "JIOFIN",
+            "LIC": "LICI",
+            "PARAG DEF": "PARACABLES",
+            "SIGACHI": "SIGACHI",
+            "IRFC": "IRFC",
+            "BSE LIMITED": "BSE",
         }
 
         # Try exact match
