@@ -50,7 +50,7 @@ with tab1:
 
         st.dataframe(
             display_df,
-            use_container_width=True,
+            width="stretch",
             hide_index=True
         )
     else:
@@ -85,7 +85,7 @@ with tab2:
 
         st.dataframe(
             display_df,
-            use_container_width=True,
+            width="stretch",
             hide_index=True
         )
     else:
@@ -123,7 +123,7 @@ with tab3:
 
     st.dataframe(
         display_df,
-        use_container_width=True,
+        width="stretch",
         hide_index=True
     )
 

@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import List, Optional
 
 import pandas as pd
-from sqlalchemy import create_engine, select, func
+from sqlalchemy import create_engine, select, func, text, inspect
 from sqlalchemy.orm import Session, sessionmaker
 
 from src.database.models import Base, Holding, Snapshot, UploadLog, HoldingType
@@ -32,6 +32,25 @@ class PortfolioRepository:
 
         # Create tables if they don't exist
         Base.metadata.create_all(self.engine)
+
+        # Run migrations for existing tables
+        self._migrate_database()
+
+    def _migrate_database(self) -> None:
+        """
+        Run database migrations to add new columns to existing tables.
+
+        This handles schema evolution for SQLite which doesn't support
+        ALTER TABLE ADD COLUMN IF NOT EXISTS.
+        """
+        inspector = inspect(self.engine)
+
+        # Check if holdings table exists
+        if 'holdings' not in inspector.get_table_names():
+            return
+
+        # Future migrations can be added here
+        pass
 
     def get_session(self) -> Session:
         """Get a new database session."""
@@ -176,7 +195,6 @@ class PortfolioRepository:
                 'total_value': s.total_value,
                 'stocks_value': s.stocks_value,
                 'mf_value': s.mf_value,
-                'crypto_value': s.crypto_value,
                 'us_stocks_value': s.us_stocks_value,
                 'total_invested': s.total_invested,
                 'total_pl': s.total_pl,
@@ -213,3 +231,83 @@ class PortfolioRepository:
         with self.get_session() as session:
             stmt = select(UploadLog).order_by(UploadLog.upload_date.desc()).limit(limit)
             return list(session.execute(stmt).scalars().all())
+
+    # Data management operations
+    def snapshot_exists(self, snapshot_date: datetime) -> bool:
+        """
+        Check if a snapshot already exists for the given date.
+
+        Parameters:
+            snapshot_date: Date to check
+
+        Returns:
+            True if snapshot exists, False otherwise
+        """
+        with self.get_session() as session:
+            stmt = select(Snapshot).where(Snapshot.snapshot_date == snapshot_date)
+            result = session.execute(stmt).scalar()
+            return result is not None
+
+    def delete_snapshot(self, snapshot_date: datetime) -> None:
+        """
+        Delete a snapshot and all associated holdings.
+
+        Parameters:
+            snapshot_date: Date of snapshot to delete
+        """
+        with self.get_session() as session:
+            # Delete holdings first
+            holdings_stmt = select(Holding).where(Holding.snapshot_date == snapshot_date)
+            holdings = session.execute(holdings_stmt).scalars().all()
+            for holding in holdings:
+                session.delete(holding)
+
+            # Delete snapshot
+            snapshot_stmt = select(Snapshot).where(Snapshot.snapshot_date == snapshot_date)
+            snapshot = session.execute(snapshot_stmt).scalar()
+            if snapshot:
+                session.delete(snapshot)
+
+            session.commit()
+
+    def delete_holdings_for_date(self, snapshot_date: datetime) -> int:
+        """
+        Delete all holdings for a specific snapshot date.
+
+        Parameters:
+            snapshot_date: Date of holdings to delete
+
+        Returns:
+            Number of holdings deleted
+        """
+        with self.get_session() as session:
+            stmt = select(Holding).where(Holding.snapshot_date == snapshot_date)
+            holdings = session.execute(stmt).scalars().all()
+            count = len(holdings)
+            for holding in holdings:
+                session.delete(holding)
+            session.commit()
+            return count
+
+    def clear_all_data(self) -> None:
+        """
+        Delete all data from all tables (holdings, snapshots, upload logs).
+        Use with caution - this cannot be undone!
+        """
+        with self.get_session() as session:
+            # Delete all holdings
+            holdings = session.execute(select(Holding)).scalars().all()
+            for holding in holdings:
+                session.delete(holding)
+
+            # Delete all snapshots
+            snapshots = session.execute(select(Snapshot)).scalars().all()
+            for snapshot in snapshots:
+                session.delete(snapshot)
+
+            # Delete all upload logs
+            logs = session.execute(select(UploadLog)).scalars().all()
+            for log in logs:
+                session.delete(log)
+
+            session.commit()
