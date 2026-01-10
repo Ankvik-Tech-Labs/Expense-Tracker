@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  investment-tracker:
+    build: .
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data:/app/data
+      - ./src:/app/src
+      - ./app:/app/app
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app
+    env_file:
+      - .env
+    restart: unless-stopped
