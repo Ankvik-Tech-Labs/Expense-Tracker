@@ -20,7 +20,6 @@ class HoldingType(enum.Enum):
     """Type of investment holding."""
     STOCK = "stock"
     MUTUAL_FUND = "mutual_fund"
-    CRYPTO = "crypto"
     US_STOCK = "us_stock"
 
 
@@ -70,7 +69,6 @@ class Snapshot(Base):
         total_value: Total portfolio value
         stocks_value: Total value of stock holdings
         mf_value: Total value of mutual fund holdings
-        crypto_value: Total value of crypto holdings
         us_stocks_value: Total value of US stock holdings
         total_invested: Total amount invested
         total_pl: Total profit/loss
@@ -85,7 +83,6 @@ class Snapshot(Base):
     total_value: Mapped[float] = mapped_column(Float, nullable=False)
     stocks_value: Mapped[float] = mapped_column(Float, default=0.0)
     mf_value: Mapped[float] = mapped_column(Float, default=0.0)
-    crypto_value: Mapped[float] = mapped_column(Float, default=0.0)
     us_stocks_value: Mapped[float] = mapped_column(Float, default=0.0)
     total_invested: Mapped[float] = mapped_column(Float, nullable=False)
     total_pl: Mapped[float] = mapped_column(Float, nullable=False)

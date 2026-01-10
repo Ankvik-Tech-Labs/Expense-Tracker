@@ -59,7 +59,7 @@ if stocks_file or mf_file:
                 st.success(f"✓ Parsed {len(df_stocks)} stock holdings from {date_stocks.strftime('%d %b %Y')}")
 
                 with st.expander("Preview Stocks Data"):
-                    st.dataframe(df_stocks.head(10), use_container_width=True)
+                    st.dataframe(df_stocks.head(10), width="stretch")
 
                 all_holdings.append(df_stocks)
                 snapshot_dates.append(date_stocks)
@@ -74,7 +74,7 @@ if stocks_file or mf_file:
                 st.success(f"✓ Parsed {len(df_mf)} mutual fund holdings from {date_mf.strftime('%d %b %Y')}")
 
                 with st.expander("Preview Mutual Funds Data"):
-                    st.dataframe(df_mf.head(10), use_container_width=True)
+                    st.dataframe(df_mf.head(10), width="stretch")
 
                 all_holdings.append(df_mf)
                 snapshot_dates.append(date_mf)
@@ -82,75 +82,151 @@ if stocks_file or mf_file:
             st.error(f"Error parsing mutual funds file: {str(e)}")
 
     # Save to database
-    if all_holdings and st.button("💾 Save to Database", type="primary"):
-        try:
-            # Combine all holdings
-            combined_df = pd.concat(all_holdings, ignore_index=True)
+    if all_holdings:
+        # Combine all holdings
+        combined_df = pd.concat(all_holdings, ignore_index=True)
+        snapshot_date = max(snapshot_dates)
 
-            # Use the latest snapshot date
-            snapshot_date = max(snapshot_dates)
+        # Check if snapshot already exists
+        snapshot_exists = repo.snapshot_exists(snapshot_date)
 
-            with st.spinner("Saving to database..."):
-                # Save holdings
-                count = repo.save_holdings(combined_df, snapshot_date)
-
-                # Calculate and save snapshot
-                summary = calculate_portfolio_summary(combined_df)
-                nifty, sensex = benchmark_service.get_benchmarks()
-
-                snapshot_data = {
-                    'snapshot_date': snapshot_date,
-                    'total_value': summary['total_value'],
-                    'stocks_value': summary['stocks_value'],
-                    'mf_value': summary['mf_value'],
-                    'crypto_value': summary['crypto_value'],
-                    'us_stocks_value': summary['us_stocks_value'],
-                    'total_invested': summary['total_invested'],
-                    'total_pl': summary['total_pl'],
-                    'total_pl_pct': summary['total_pl_pct'],
-                    'benchmark_nifty': nifty,
-                    'benchmark_sensex': sensex
-                }
-                repo.save_snapshot(snapshot_data)
-
-                # Log uploads
-                if stocks_file:
-                    repo.log_upload({
-                        'upload_date': datetime.now(),
-                        'snapshot_date': snapshot_date,
-                        'filename': stocks_file.name,
-                        'file_type': 'stocks',
-                        'records_count': len(df_stocks),
-                        'status': 'success'
-                    })
-
-                if mf_file:
-                    repo.log_upload({
-                        'upload_date': datetime.now(),
-                        'snapshot_date': snapshot_date,
-                        'filename': mf_file.name,
-                        'file_type': 'mutual_funds',
-                        'records_count': len(df_mf),
-                        'status': 'success'
-                    })
-
-            st.success(f"✅ Successfully saved {count} holdings for {snapshot_date.strftime('%d %b %Y')}")
-            st.balloons()
-
-            # Show summary
-            st.markdown("### 📊 Summary")
-            col1, col2, col3 = st.columns(3)
+        if snapshot_exists:
+            st.warning(f"⚠️ Data for {snapshot_date.strftime('%d %b %Y')} already exists!")
+            col1, col2 = st.columns(2)
             with col1:
-                st.metric("Total Value", f"₹{summary['total_value']:,.2f}")
+                replace_btn = st.button("🔄 Replace Existing Data", type="primary")
             with col2:
-                st.metric("Total Invested", f"₹{summary['total_invested']:,.2f}")
-            with col3:
-                st.metric("Total P&L", f"₹{summary['total_pl']:,.2f}", f"{summary['total_pl_pct']:.2f}%")
+                cancel_btn = st.button("❌ Cancel")
 
-        except Exception as e:
-            st.error(f"Error saving to database: {str(e)}")
-            import traceback
-            st.code(traceback.format_exc())
+            if replace_btn:
+                try:
+                    with st.spinner("Replacing existing data..."):
+                        # Delete existing snapshot and holdings
+                        repo.delete_snapshot(snapshot_date)
+
+                        # Save new data
+                        count = repo.save_holdings(combined_df, snapshot_date)
+
+                        # Calculate and save snapshot
+                        summary = calculate_portfolio_summary(combined_df)
+                        nifty, sensex = benchmark_service.get_benchmarks()
+
+                        snapshot_data = {
+                            'snapshot_date': snapshot_date,
+                            'total_value': summary['total_value'],
+                            'stocks_value': summary['stocks_value'],
+                            'mf_value': summary['mf_value'],
+                            'us_stocks_value': summary['us_stocks_value'],
+                            'total_invested': summary['total_invested'],
+                            'total_pl': summary['total_pl'],
+                            'total_pl_pct': summary['total_pl_pct'],
+                            'benchmark_nifty': nifty,
+                            'benchmark_sensex': sensex
+                        }
+                        repo.save_snapshot(snapshot_data)
+
+                        # Log uploads
+                        if stocks_file:
+                            repo.log_upload({
+                                'upload_date': datetime.now(),
+                                'snapshot_date': snapshot_date,
+                                'filename': stocks_file.name,
+                                'file_type': 'stocks',
+                                'records_count': len(df_stocks),
+                                'status': 'success'
+                            })
+
+                        if mf_file:
+                            repo.log_upload({
+                                'upload_date': datetime.now(),
+                                'snapshot_date': snapshot_date,
+                                'filename': mf_file.name,
+                                'file_type': 'mutual_funds',
+                                'records_count': len(df_mf),
+                                'status': 'success'
+                            })
+
+                    st.success(f"✅ Successfully replaced {count} holdings for {snapshot_date.strftime('%d %b %Y')}")
+                    st.balloons()
+
+                    # Show summary
+                    st.markdown("### 📊 Summary")
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Total Value", f"₹{summary['total_value']:,.2f}")
+                    with col2:
+                        st.metric("Total Invested", f"₹{summary['total_invested']:,.2f}")
+                    with col3:
+                        st.metric("Total P&L", f"₹{summary['total_pl']:,.2f}", f"{summary['total_pl_pct']:.2f}%")
+
+                except Exception as e:
+                    st.error(f"Error replacing data: {str(e)}")
+                    import traceback
+                    st.code(traceback.format_exc())
+        else:
+            # Save button for new data
+            if st.button("💾 Save to Database", type="primary"):
+                try:
+                    with st.spinner("Saving to database..."):
+                        # Save holdings
+                        count = repo.save_holdings(combined_df, snapshot_date)
+
+                        # Calculate and save snapshot
+                        summary = calculate_portfolio_summary(combined_df)
+                        nifty, sensex = benchmark_service.get_benchmarks()
+
+                        snapshot_data = {
+                            'snapshot_date': snapshot_date,
+                            'total_value': summary['total_value'],
+                            'stocks_value': summary['stocks_value'],
+                            'mf_value': summary['mf_value'],
+                            'us_stocks_value': summary['us_stocks_value'],
+                            'total_invested': summary['total_invested'],
+                            'total_pl': summary['total_pl'],
+                            'total_pl_pct': summary['total_pl_pct'],
+                            'benchmark_nifty': nifty,
+                            'benchmark_sensex': sensex
+                        }
+                        repo.save_snapshot(snapshot_data)
+
+                        # Log uploads
+                        if stocks_file:
+                            repo.log_upload({
+                                'upload_date': datetime.now(),
+                                'snapshot_date': snapshot_date,
+                                'filename': stocks_file.name,
+                                'file_type': 'stocks',
+                                'records_count': len(df_stocks),
+                                'status': 'success'
+                            })
+
+                        if mf_file:
+                            repo.log_upload({
+                                'upload_date': datetime.now(),
+                                'snapshot_date': snapshot_date,
+                                'filename': mf_file.name,
+                                'file_type': 'mutual_funds',
+                                'records_count': len(df_mf),
+                                'status': 'success'
+                            })
+
+                    st.success(f"✅ Successfully saved {count} holdings for {snapshot_date.strftime('%d %b %Y')}")
+                    st.balloons()
+
+                    # Show summary
+                    st.markdown("### 📊 Summary")
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Total Value", f"₹{summary['total_value']:,.2f}")
+                    with col2:
+                        st.metric("Total Invested", f"₹{summary['total_invested']:,.2f}")
+                    with col3:
+                        st.metric("Total P&L", f"₹{summary['total_pl']:,.2f}", f"{summary['total_pl_pct']:.2f}%")
+
+                except Exception as e:
+                    st.error(f"Error saving to database: {str(e)}")
+                    import traceback
+                    st.code(traceback.format_exc())
 
 st.markdown("---")
 
@@ -170,6 +246,54 @@ if upload_logs:
             'Status': log.status
         })
 
-    st.dataframe(pd.DataFrame(logs_data), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(logs_data), width="stretch", hide_index=True)
 else:
     st.info("No upload history yet.")
+
+st.markdown("---")
+
+# Data Management Section
+st.subheader("🗑️ Data Management")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    st.markdown("#### Delete Specific Snapshot")
+    st.caption("Remove a specific month's data and all associated holdings")
+
+    # Get all snapshots for dropdown
+    snapshots = repo.get_snapshots(limit=100)
+    if snapshots:
+        snapshot_options = {s.snapshot_date.strftime('%b %Y'): s.snapshot_date for s in snapshots}
+        selected_snapshot = st.selectbox(
+            "Select snapshot to delete",
+            options=list(snapshot_options.keys()),
+            key='delete_snapshot_select'
+        )
+
+        if st.button("🗑️ Delete Selected Snapshot", type="secondary"):
+            if selected_snapshot:
+                snapshot_date = snapshot_options[selected_snapshot]
+                try:
+                    repo.delete_snapshot(snapshot_date)
+                    st.success(f"✅ Deleted snapshot for {selected_snapshot}")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error deleting snapshot: {str(e)}")
+    else:
+        st.info("No snapshots available to delete")
+
+with col2:
+    st.markdown("#### Clear All Data")
+    st.caption("⚠️ Delete ALL data from the database - cannot be undone!")
+
+    # Add a confirmation checkbox
+    confirm_clear = st.checkbox("I understand this will delete all data permanently", key='confirm_clear')
+
+    if st.button("🗑️ Clear All Data", type="secondary", disabled=not confirm_clear):
+        try:
+            repo.clear_all_data()
+            st.success("✅ All data has been cleared from the database")
+            st.rerun()
+        except Exception as e:
+            st.error(f"Error clearing data: {str(e)}")

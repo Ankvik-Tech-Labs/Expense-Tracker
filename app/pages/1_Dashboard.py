@@ -9,7 +9,8 @@ from src.services.portfolio import (
     calculate_portfolio_summary,
     get_top_performers,
     get_bottom_performers,
-    calculate_asset_allocation
+    calculate_asset_allocation,
+    calculate_monthly_changes
 )
 from src.services.benchmarks import BenchmarkService
 
@@ -37,7 +38,7 @@ col1, col2, col3, col4 = st.columns(4)
 
 with col1:
     st.metric(
-        "Total Portfolio Value",
+        "Total Portfolio",
         f"₹{summary['total_value']:,.2f}",
         f"{summary['total_pl_pct']:.2f}%"
     )
@@ -78,7 +79,7 @@ with col1:
             names='asset_type',
             title="Portfolio Distribution"
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
 with col2:
     st.subheader("Portfolio Trend")
@@ -99,7 +100,38 @@ with col2:
             yaxis_title="Value (₹)",
             hovermode='x unified'
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
+
+st.markdown("---")
+
+# Monthly Summary (Compact - Last 6 Months)
+with st.expander("📊 Monthly Summary (Last 6 Months)", expanded=False):
+    snapshots_df = repo.get_snapshots_df(limit=6)
+    if not snapshots_df.empty:
+        monthly_df = calculate_monthly_changes(snapshots_df)
+        if not monthly_df.empty:
+            # Sort by date descending for display (most recent first)
+            monthly_df = monthly_df.sort_values('snapshot_date', ascending=False)
+
+            # Create display DataFrame
+            display_df = monthly_df[[
+                'month', 'total_value', 'stocks_value', 'mf_value',
+                'mom_change', 'mom_change_pct'
+            ]].copy()
+
+            display_df.columns = ['Month', 'Total Value', 'Stocks', 'Mutual Funds', 'Change', 'Change %']
+
+            # Format currency columns
+            for col in ['Total Value', 'Stocks', 'Mutual Funds', 'Change']:
+                display_df[col] = display_df[col].apply(lambda x: f"₹{x:,.2f}")
+
+            display_df['Change %'] = display_df['Change %'].apply(lambda x: f"{x:.2f}%")
+
+            st.dataframe(display_df, width="stretch", hide_index=True)
+
+            st.caption("💡 For detailed monthly analysis, visit the Trends page.")
+    else:
+        st.info("No monthly data available yet. Upload data for multiple months to see trends.")
 
 st.markdown("---")
 
@@ -111,12 +143,12 @@ with col1:
     top_df = get_top_performers(holdings_df, n=5)
     if not top_df.empty:
         for idx, row in top_df.iterrows():
-            delta_color = "normal" if row['unrealized_pl_pct'] >= 0 else "inverse"
+            # Always use "normal" so positive P&L shows green, negative shows red
             st.metric(
                 row['name'][:30],
                 f"₹{row['current_value']:,.2f}",
                 f"{row['unrealized_pl_pct']:.2f}%",
-                delta_color=delta_color
+                delta_color="normal"
             )
 
 with col2:
@@ -124,12 +156,12 @@ with col2:
     bottom_df = get_bottom_performers(holdings_df, n=5)
     if not bottom_df.empty:
         for idx, row in bottom_df.iterrows():
-            delta_color = "normal" if row['unrealized_pl_pct'] >= 0 else "inverse"
+            # Always use "normal" so negative P&L shows red, positive shows green
             st.metric(
                 row['name'][:30],
                 f"₹{row['current_value']:,.2f}",
                 f"{row['unrealized_pl_pct']:.2f}%",
-                delta_color=delta_color
+                delta_color="normal"
             )
 
 st.markdown("---")
