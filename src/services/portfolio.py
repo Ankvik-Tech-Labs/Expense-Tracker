@@ -30,6 +30,7 @@ def calculate_portfolio_summary(holdings_df: pd.DataFrame) -> Dict:
             "stocks_value": 0.0,
             "mf_value": 0.0,
             "us_stocks_value": 0.0,
+            "crypto_value": 0.0,
         }
 
     summary = {
@@ -54,6 +55,9 @@ def calculate_portfolio_summary(holdings_df: pd.DataFrame) -> Dict:
         "current_value"
     ].sum()
     summary["us_stocks_value"] = holdings_df[holdings_df["type"] == "us_stock"][
+        "current_value"
+    ].sum()
+    summary["crypto_value"] = holdings_df[holdings_df["type"] == "crypto"][
         "current_value"
     ].sum()
 

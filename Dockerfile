@@ -2,6 +2,17 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# Install system dependencies
+# - git: needed for pip git+ dependencies
+# - build-essential: C compiler for native extensions (safe-pysha3, etc.)
+# - python3-dev: Python headers for C extensions
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    curl \
+    build-essential \
+    python3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
@@ -16,6 +27,13 @@ RUN uv sync --frozen
 COPY src/ src/
 COPY app/ app/
 COPY data/ data/
+
+# Copy ape configuration for crypto-portfolio-tracker
+COPY ape-config.yaml .
+
+# Install Ape plugins (infura, etherscan, base, etc.)
+# Use || true since plugins may already be installed via crypto-portfolio-tracker
+RUN uv run ape plugins install . || true
 
 # Expose Streamlit port
 EXPOSE 8501

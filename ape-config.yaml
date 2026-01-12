@@ -1,0 +1,54 @@
+name: investment_tracker
+
+# Plugins for RPC access
+plugins:
+  - name: infura      # Infura RPC provider
+  - name: etherscan   # For contract ABIs
+  - name: base        # Base chain support
+
+default_ecosystem: ethereum
+
+# Ethereum mainnet configuration
+ethereum:
+  default_network: mainnet
+  mainnet:
+    default_provider: infura
+    required_confirmations: 0  # Read-only, no confirmations needed
+
+# Base mainnet configuration
+base:
+  default_network: mainnet
+  mainnet:
+    default_provider: infura
+    required_confirmations: 0
+
+# Arbitrum configuration
+arbitrum:
+  default_network: mainnet
+  mainnet:
+    default_provider: infura
+    required_confirmations: 0
+
+# Optimism configuration
+optimism:
+  default_network: mainnet
+  mainnet:
+    default_provider: infura
+    required_confirmations: 0
+
+# Polygon configuration
+polygon:
+  default_network: mainnet
+  mainnet:
+    default_provider: infura
+    required_confirmations: 0
+
+# Infura configuration
+# Reads $WEB3_INFURA_PROJECT_ID from environment
+infura:
+  project_id: $WEB3_INFURA_PROJECT_ID
+
+# Etherscan configuration
+# Reads $ETHERSCAN_API_KEY from environment
+etherscan:
+  api_key: $ETHERSCAN_API_KEY

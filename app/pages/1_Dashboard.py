@@ -38,8 +38,8 @@ latest_date = (
     holdings_df["snapshot_date"].iloc[0] if not holdings_df.empty else datetime.now()
 )
 
-# KPI Cards
-col1, col2, col3, col4 = st.columns(4)
+# KPI Cards - Row 1: Total and P&L
+col1, col2 = st.columns(2)
 
 with col1:
     st.metric(
@@ -50,6 +50,14 @@ with col1:
 
 with col2:
     st.metric(
+        "Total P&L", f"₹{summary['total_pl']:,.2f}", f"{summary['total_pl_pct']:.2f}%"
+    )
+
+# KPI Cards - Row 2: Asset breakdown
+col1, col2, col3, col4 = st.columns(4)
+
+with col1:
+    st.metric(
         "Stocks",
         f"₹{summary['stocks_value']:,.2f}",
         f"{(summary['stocks_value'] / summary['total_value'] * 100):.1f}%"
@@ -57,7 +65,7 @@ with col2:
         else "0%",
     )
 
-with col3:
+with col2:
     st.metric(
         "Mutual Funds",
         f"₹{summary['mf_value']:,.2f}",
@@ -66,9 +74,23 @@ with col3:
         else "0%",
     )
 
-with col4:
+with col3:
     st.metric(
-        "Total P&L", f"₹{summary['total_pl']:,.2f}", f"{summary['total_pl_pct']:.2f}%"
+        "US Stocks",
+        f"₹{summary['us_stocks_value']:,.2f}",
+        f"{(summary['us_stocks_value'] / summary['total_value'] * 100):.1f}%"
+        if summary["total_value"] > 0
+        else "0%",
+    )
+
+with col4:
+    crypto_value = summary.get("crypto_value", 0.0)
+    st.metric(
+        "Crypto",
+        f"₹{crypto_value:,.2f}",
+        f"{(crypto_value / summary['total_value'] * 100):.1f}%"
+        if summary["total_value"] > 0
+        else "0%",
     )
 
 st.markdown("---")

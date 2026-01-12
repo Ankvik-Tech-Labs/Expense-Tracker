@@ -80,3 +80,6 @@ token.json
 
 # macOS extended attributes
 ._*
+
+# ruff
+.ruff_cache/

@@ -12,7 +12,14 @@ import pandas as pd
 from sqlalchemy import create_engine, select, func, text, inspect
 from sqlalchemy.orm import Session, sessionmaker
 
-from src.database.models import Base, Holding, Snapshot, UploadLog, HoldingType
+from src.database.models import (
+    Base,
+    Holding,
+    Snapshot,
+    UploadLog,
+    HoldingType,
+    WalletAddress,
+)
 
 
 class PortfolioRepository:
@@ -45,13 +52,23 @@ class PortfolioRepository:
         ALTER TABLE ADD COLUMN IF NOT EXISTS.
         """
         inspector = inspect(self.engine)
+        table_names = inspector.get_table_names()
 
         # Check if holdings table exists
-        if "holdings" not in inspector.get_table_names():
+        if "holdings" not in table_names:
             return
 
-        # Future migrations can be added here
-        pass
+        # Add crypto_value to snapshots if missing
+        if "snapshots" in table_names:
+            columns = [col["name"] for col in inspector.get_columns("snapshots")]
+            if "crypto_value" not in columns:
+                with self.engine.connect() as conn:
+                    conn.execute(
+                        text(
+                            "ALTER TABLE snapshots ADD COLUMN crypto_value REAL DEFAULT 0.0"
+                        )
+                    )
+                    conn.commit()
 
     def get_session(self) -> Session:
         """Get a new database session."""
@@ -94,10 +111,10 @@ class PortfolioRepository:
 
     def get_holdings(self, snapshot_date: Optional[datetime] = None) -> List[Holding]:
         """
-        Get holdings for a specific date or latest.
+        Get holdings for a specific date or latest per type.
 
         Parameters:
-            snapshot_date: Specific date to retrieve, or None for latest
+            snapshot_date: Specific date to retrieve, or None for latest per type
 
         Returns:
             List of Holding objects
@@ -105,15 +122,26 @@ class PortfolioRepository:
         with self.get_session() as session:
             if snapshot_date:
                 stmt = select(Holding).where(Holding.snapshot_date == snapshot_date)
+                return list(session.execute(stmt).scalars().all())
             else:
-                # Get latest snapshot date
-                latest_date_stmt = select(func.max(Holding.snapshot_date))
-                latest_date = session.execute(latest_date_stmt).scalar()
-                if not latest_date:
-                    return []
-                stmt = select(Holding).where(Holding.snapshot_date == latest_date)
-
-            return list(session.execute(stmt).scalars().all())
+                # Get latest snapshot date for each holding type
+                # This ensures we show the most recent data for stocks, MF, crypto, etc.
+                all_holdings = []
+                for holding_type in HoldingType:
+                    # Find the latest date for this type
+                    latest_date_stmt = select(func.max(Holding.snapshot_date)).where(
+                        Holding.type == holding_type
+                    )
+                    latest_date = session.execute(latest_date_stmt).scalar()
+                    if latest_date:
+                        # Get all holdings of this type for that date
+                        stmt = select(Holding).where(
+                            Holding.snapshot_date == latest_date,
+                            Holding.type == holding_type,
+                        )
+                        holdings = session.execute(stmt).scalars().all()
+                        all_holdings.extend(holdings)
+                return all_holdings
 
     def get_holdings_df(self, snapshot_date: Optional[datetime] = None) -> pd.DataFrame:
         """
@@ -200,6 +228,7 @@ class PortfolioRepository:
                     "stocks_value": s.stocks_value,
                     "mf_value": s.mf_value,
                     "us_stocks_value": s.us_stocks_value,
+                    "crypto_value": s.crypto_value,
                     "total_invested": s.total_invested,
                     "total_pl": s.total_pl,
                     "total_pl_pct": s.total_pl_pct,
@@ -345,3 +374,121 @@ class PortfolioRepository:
                 session.delete(log)
 
             session.commit()
+
+    # Wallet address operations
+    def add_wallet(
+        self,
+        address: str,
+        label: str,
+        chains: str = "ethereum,base,arbitrum,optimism,polygon",
+    ) -> WalletAddress:
+        """
+        Add a new wallet address.
+
+        :param address: Ethereum wallet address (0x...).
+        :type address: str
+        :param label: User-friendly label for the wallet.
+        :type label: str
+        :param chains: Comma-separated list of chains to scan.
+        :type chains: str
+        :returns: Created WalletAddress object.
+        :rtype: WalletAddress
+        :raises ValueError: If wallet address already exists.
+        """
+        with self.get_session() as session:
+            # Check if wallet already exists
+            existing = session.execute(
+                select(WalletAddress).where(WalletAddress.address == address.lower())
+            ).scalar()
+            if existing:
+                raise ValueError(f"Wallet address already exists: {address}")
+
+            wallet = WalletAddress(
+                address=address.lower(),
+                label=label,
+                chains=chains,
+            )
+            session.add(wallet)
+            session.commit()
+            session.refresh(wallet)
+            return wallet
+
+    def get_wallets(self, active_only: bool = True) -> List[WalletAddress]:
+        """
+        Get all wallet addresses.
+
+        :param active_only: If True, only return active wallets.
+        :type active_only: bool
+        :returns: List of WalletAddress objects.
+        :rtype: List[WalletAddress]
+        """
+        with self.get_session() as session:
+            stmt = select(WalletAddress)
+            if active_only:
+                stmt = stmt.where(WalletAddress.is_active == True)
+            stmt = stmt.order_by(WalletAddress.created_at.desc())
+            return list(session.execute(stmt).scalars().all())
+
+    def get_wallet_by_id(self, wallet_id: int) -> Optional[WalletAddress]:
+        """
+        Get a wallet by ID.
+
+        :param wallet_id: Wallet ID.
+        :type wallet_id: int
+        :returns: WalletAddress object or None if not found.
+        :rtype: Optional[WalletAddress]
+        """
+        with self.get_session() as session:
+            return session.execute(
+                select(WalletAddress).where(WalletAddress.id == wallet_id)
+            ).scalar()
+
+    def update_wallet(self, wallet_id: int, **kwargs) -> None:
+        """
+        Update wallet properties.
+
+        :param wallet_id: Wallet ID to update.
+        :type wallet_id: int
+        :param kwargs: Fields to update (label, chains, is_active).
+        """
+        with self.get_session() as session:
+            wallet = session.execute(
+                select(WalletAddress).where(WalletAddress.id == wallet_id)
+            ).scalar()
+            if wallet:
+                for key, value in kwargs.items():
+                    if hasattr(wallet, key):
+                        setattr(wallet, key, value)
+                session.commit()
+
+    def delete_wallet(self, wallet_id: int) -> None:
+        """
+        Remove a wallet address.
+
+        :param wallet_id: Wallet ID to delete.
+        :type wallet_id: int
+        """
+        with self.get_session() as session:
+            wallet = session.execute(
+                select(WalletAddress).where(WalletAddress.id == wallet_id)
+            ).scalar()
+            if wallet:
+                session.delete(wallet)
+                session.commit()
+
+    def update_wallet_last_scanned(self, wallet_id: int) -> None:
+        """
+        Update the last_scanned timestamp for a wallet.
+
+        :param wallet_id: Wallet ID to update.
+        :type wallet_id: int
+        """
+        from datetime import datetime
+
+        with self.get_session() as session:
+            wallet = session.execute(
+                select(WalletAddress).where(WalletAddress.id == wallet_id)
+            ).scalar()
+            if wallet:
+                wallet.last_scanned = datetime.utcnow()
+                session.commit()

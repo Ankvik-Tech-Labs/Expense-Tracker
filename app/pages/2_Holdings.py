@@ -22,8 +22,14 @@ if holdings_df.empty:
     st.stop()
 
 # Tabs for different types
-tab1, tab2, tab3, tab4 = st.tabs(
-    ["📈 Indian Stocks", "💰 Mutual Funds", "🇺🇸 US Stocks", "🔍 All Holdings"]
+tab1, tab2, tab3, tab4, tab5 = st.tabs(
+    [
+        "📈 Indian Stocks",
+        "💰 Mutual Funds",
+        "🇺🇸 US Stocks",
+        "₿ Crypto",
+        "🔍 All Holdings",
+    ]
 )
 
 with tab1:
@@ -188,6 +194,56 @@ with tab3:
         st.info("No US stock holdings found.")
 
 with tab4:
+    st.subheader("Crypto DeFi Positions")
+    crypto_df = holdings_df[holdings_df["type"] == "crypto"].copy()
+
+    if not crypto_df.empty:
+        # Summary metrics
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Total Crypto Value", f"₹{crypto_df['current_value'].sum():,.2f}")
+        with col2:
+            st.metric("Positions", len(crypto_df))
+        with col3:
+            # Count unique chains (stored in symbol field)
+            chains = crypto_df["symbol"].nunique()
+            st.metric("Chains", chains)
+
+        st.markdown("---")
+
+        # Display table
+        display_df = crypto_df[
+            [
+                "name",
+                "symbol",
+                "units",
+                "current_value",
+            ]
+        ].copy()
+        display_df.columns = [
+            "Position",
+            "Chain",
+            "Balance",
+            "Value (INR)",
+        ]
+
+        # Format numbers
+        display_df["Balance"] = display_df["Balance"].apply(
+            lambda x: f"{x:,.6f}" if pd.notna(x) else "-"
+        )
+        display_df["Value (INR)"] = display_df["Value (INR)"].apply(
+            lambda x: f"₹{x:,.2f}" if pd.notna(x) else "-"
+        )
+
+        st.dataframe(display_df, width="stretch", hide_index=True)
+
+        st.caption(
+            "Note: Crypto positions show value only. P&L tracking is not available for DeFi positions."
+        )
+    else:
+        st.info("No crypto positions found. Go to the Crypto page to scan wallets.")
+
+with tab5:
     st.subheader("All Holdings")
 
     # Summary

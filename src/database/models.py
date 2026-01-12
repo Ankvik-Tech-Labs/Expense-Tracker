@@ -7,7 +7,7 @@ This module defines the SQLAlchemy ORM models for storing portfolio data.
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Float, Integer, String, DateTime, Enum as SQLEnum
+from sqlalchemy import Boolean, Float, Integer, String, DateTime, Enum as SQLEnum
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 import enum
 
@@ -24,6 +24,7 @@ class HoldingType(enum.Enum):
     STOCK = "stock"
     MUTUAL_FUND = "mutual_fund"
     US_STOCK = "us_stock"
+    CRYPTO = "crypto"
 
 
 class Holding(Base):
@@ -93,6 +94,7 @@ class Snapshot(Base):
     stocks_value: Mapped[float] = mapped_column(Float, default=0.0)
     mf_value: Mapped[float] = mapped_column(Float, default=0.0)
     us_stocks_value: Mapped[float] = mapped_column(Float, default=0.0)
+    crypto_value: Mapped[float] = mapped_column(Float, default=0.0)
     total_invested: Mapped[float] = mapped_column(Float, nullable=False)
     total_pl: Mapped[float] = mapped_column(Float, nullable=False)
     total_pl_pct: Mapped[float] = mapped_column(Float, nullable=False)
@@ -127,3 +129,36 @@ class UploadLog(Base):
     records_count: Mapped[int] = mapped_column(Integer, default=0)
     status: Mapped[str] = mapped_column(String(20), nullable=False)
     error_message: Mapped[Optional[str]] = mapped_column(String(500))
+
+
+class WalletAddress(Base):
+    """
+    Ethereum wallet address for crypto DeFi tracking.
+
+    :param id: Primary key.
+    :type id: int
+    :param address: Ethereum wallet address (0x...).
+    :type address: str
+    :param label: User-friendly label for the wallet.
+    :type label: str
+    :param chains: Comma-separated list of chains to scan.
+    :type chains: str
+    :param is_active: Whether to include in scans.
+    :type is_active: bool
+    :param created_at: When the wallet was added.
+    :type created_at: datetime
+    :param last_scanned: Last successful scan timestamp.
+    :type last_scanned: datetime
+    """
+
+    __tablename__ = "wallet_addresses"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    address: Mapped[str] = mapped_column(String(42), nullable=False, unique=True)
+    label: Mapped[str] = mapped_column(String(100), nullable=False)
+    chains: Mapped[str] = mapped_column(
+        String(200), default="ethereum,base,arbitrum,optimism,polygon"
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    last_scanned: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
