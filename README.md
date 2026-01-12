@@ -4,18 +4,13 @@ A comprehensive portfolio tracking system built with Python and Streamlit for tr
 
 <div align="center">
 
-![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)
-![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
-![Status](https://img.shields.io/badge/status-active-success.svg)
-
-![Streamlit](https://img.shields.io/badge/Streamlit-1.32+-FF4B4B?logo=streamlit&logoColor=white)
-![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-2.0-D71F00?logo=sqlalchemy&logoColor=white)
-![Plotly](https://img.shields.io/badge/Plotly-5.18+-3F4F75?logo=plotly&logoColor=white)
-![Pandas](https://img.shields.io/badge/pandas-2.0+-150458?logo=pandas&logoColor=white)
-
-![uv](https://img.shields.io/badge/uv-package_manager-DE5FE9?logo=astral&logoColor=white)
-![Docker](https://img.shields.io/badge/Docker-enabled-2496ED?logo=docker&logoColor=white)
-![SQLite](https://img.shields.io/badge/SQLite-3.0+-003B57?logo=sqlite&logoColor=white)
+|          |                                                                                                                                                                                                                                                                                                                                                                     |
+|----------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Details  | ![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg) ![License: MIT](https://img.shields.io/badge/License-MIT-green.svg) ![Status](https://img.shields.io/badge/status-active-success.svg)                                                                                                                                                         |
+| Stack    | ![Streamlit](https://img.shields.io/badge/Streamlit-1.32+-FF4B4B?logo=streamlit&logoColor=white) ![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-2.0-D71F00?logo=sqlalchemy&logoColor=white) ![Plotly](https://img.shields.io/badge/Plotly-5.18+-3F4F75?logo=plotly&logoColor=white) ![Pandas](https://img.shields.io/badge/pandas-2.0+-150458?logo=pandas&logoColor=white) |
+| Tools    | ![uv](https://img.shields.io/badge/uv-package_manager-DE5FE9?logo=astral&logoColor=white) ![Docker](https://img.shields.io/badge/Docker-enabled-2496ED?logo=docker&logoColor=white) ![Yahoo Finance](https://img.shields.io/badge/Yahoo_Finance-API-720E9E?logo=yahoo&logoColor=white)                                                                            |
+| Database | ![SQLite](https://img.shields.io/badge/SQLite-3.0+-003B57?logo=sqlite&logoColor=white) ![Type Safety](https://img.shields.io/badge/Type_Safety-SQLAlchemy_ORM-informational)                                                                                                                                                                                       |
+| Crypto   | ![Web3](https://img.shields.io/badge/Web3-DeFi-F16822?logo=web3.js&logoColor=white) ![Ethereum](https://img.shields.io/badge/Ethereum-Multi--Chain-3C3C3D?logo=ethereum&logoColor=white) ![Aave](https://img.shields.io/badge/Aave-Supported-2EBAC6?logo=aave&logoColor=white)                                                                                     |
 
 </div>
 
