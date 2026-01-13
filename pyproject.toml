@@ -14,7 +14,10 @@ dependencies = [
     "gspread>=6.0.0",
     "oauth2client>=4.1.3",
     "python-dotenv>=1.0.0",
-    # Crypto portfolio tracking
+]
+
+[project.optional-dependencies]
+crypto = [
     "crypto-portfolio-tracker @ git+https://github.com/Ankvik-Tech-Labs/Crypto-portfolio-tracker.git",
 ]
 

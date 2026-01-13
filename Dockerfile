@@ -20,6 +20,9 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 COPY pyproject.toml .
 COPY uv.lock .
 
+# Workaround: cchecksum's setup.py has a bug that expects requirements.txt
+RUN touch requirements.txt
+
 # Install dependencies
 RUN uv sync --frozen
 
@@ -45,5 +48,5 @@ ENV PYTHONPATH=/app
 # Health check
 HEALTHCHECK CMD curl --fail http://localhost:8501/_stcore/health || exit 1
 
-# Run Streamlit app
-CMD ["uv", "run", "streamlit", "run", "app/main.py", "--server.port=8501", "--server.address=0.0.0.0"]
+# Run Streamlit app (--no-sync to avoid re-resolving dependencies at runtime)
+CMD ["uv", "run", "--no-sync", "streamlit", "run", "app/main.py", "--server.port=8501", "--server.address=0.0.0.0"]
