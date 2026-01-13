@@ -3,13 +3,11 @@
 import streamlit as st
 from datetime import datetime
 import pandas as pd
-from sqlalchemy import select
 
 from src.parsers.stocks import parse_stocks_file
 from src.parsers.mutual_funds import parse_mutual_funds_file
 from src.parsers.us_stocks import parse_us_stocks_file
 from src.database.repository import PortfolioRepository
-from src.database.models import Snapshot
 from src.services.portfolio import calculate_portfolio_summary
 from src.services.benchmarks import BenchmarkService
 
@@ -121,238 +119,136 @@ if stocks_file or mf_file or us_stocks_file:
         combined_df = pd.concat(all_holdings, ignore_index=True)
         snapshot_date = max(snapshot_dates)
 
-        # Check if snapshot already exists
-        snapshot_exists = repo.snapshot_exists(snapshot_date)
+        # Determine which types are being uploaded
+        upload_types = []
+        if stocks_file:
+            upload_types.append("stock")
+        if mf_file:
+            upload_types.append("mutual_fund")
+        if us_stocks_file:
+            upload_types.append("us_stock")
 
-        if snapshot_exists:
+        # Check for existing snapshot in the same month
+        existing_in_month = repo.find_snapshot_in_month(snapshot_date)
+        same_date_exists = repo.snapshot_exists(snapshot_date)
+
+        # Show appropriate message based on existing data
+        if same_date_exists:
             st.warning(
-                f"⚠️ Data for {snapshot_date.strftime('%d %b %Y')} already exists!"
+                f"⚠️ Data for {snapshot_date.strftime('%d %b %Y')} already exists! "
+                f"Saving will replace existing data for: {', '.join(upload_types)}"
             )
-            col1, col2 = st.columns(2)
-            with col1:
-                replace_btn = st.button("🔄 Replace Existing Data", type="primary")
-            with col2:
-                cancel_btn = st.button("❌ Cancel")
+        elif existing_in_month:
+            old_date, _ = existing_in_month
+            st.info(
+                f"📅 Found existing snapshot for {old_date.strftime('%d %b %Y')} "
+                f"in the same month. Data will be merged into {snapshot_date.strftime('%d %b %Y')}."
+            )
 
-            if replace_btn:
-                try:
-                    with st.spinner("Replacing existing data..."):
-                        # Determine which types are being uploaded
-                        types_to_replace = []
-                        if stocks_file:
-                            types_to_replace.append("stock")
-                        if mf_file:
-                            types_to_replace.append("mutual_fund")
-                        if us_stocks_file:
-                            types_to_replace.append("us_stock")
-
-                        # Delete only holdings of the types being uploaded
-                        deleted_count = repo.delete_holdings_by_type(
-                            snapshot_date, types_to_replace
-                        )
-                        st.info(
-                            f"Deleted {deleted_count} existing holdings of types: {', '.join(types_to_replace)}"
-                        )
-
-                        # Get existing holdings (other types that weren't deleted)
-                        existing_holdings_df = repo.get_holdings_df(snapshot_date)
-
-                        # Combine existing holdings with new uploads
-                        if not existing_holdings_df.empty:
-                            final_df = pd.concat(
-                                [existing_holdings_df, combined_df], ignore_index=True
-                            )
-                            st.info(
-                                f"Merged {len(existing_holdings_df)} existing holdings with {len(combined_df)} new holdings"
-                            )
-                        else:
-                            final_df = combined_df
-
-                        # Save new data
-                        count = repo.save_holdings(combined_df, snapshot_date)
-
-                        # Calculate summary with ALL holdings (existing + new)
-                        summary = calculate_portfolio_summary(final_df)
-                        nifty, sensex = benchmark_service.get_benchmarks()
-
-                        # Delete old snapshot record (to avoid unique constraint violation)
-                        # Note: This only deletes the snapshot record, not the holdings
-                        with repo.get_session() as session:
-                            stmt = select(Snapshot).where(
-                                Snapshot.snapshot_date == snapshot_date
-                            )
-                            snapshot = session.execute(stmt).scalar()
-                            if snapshot:
-                                session.delete(snapshot)
-                                session.commit()
-
-                        # Save updated snapshot with combined summary
-                        snapshot_data = {
-                            "snapshot_date": snapshot_date,
-                            "total_value": summary["total_value"],
-                            "stocks_value": summary["stocks_value"],
-                            "mf_value": summary["mf_value"],
-                            "us_stocks_value": summary["us_stocks_value"],
-                            "total_invested": summary["total_invested"],
-                            "total_pl": summary["total_pl"],
-                            "total_pl_pct": summary["total_pl_pct"],
-                            "benchmark_nifty": nifty,
-                            "benchmark_sensex": sensex,
-                        }
-                        repo.save_snapshot(snapshot_data)
-
-                        # Log uploads
-                        if stocks_file:
-                            repo.log_upload(
-                                {
-                                    "upload_date": datetime.now(),
-                                    "snapshot_date": snapshot_date,
-                                    "filename": stocks_file.name,
-                                    "file_type": "stocks",
-                                    "records_count": len(df_stocks),
-                                    "status": "success",
-                                }
-                            )
-
-                        if mf_file:
-                            repo.log_upload(
-                                {
-                                    "upload_date": datetime.now(),
-                                    "snapshot_date": snapshot_date,
-                                    "filename": mf_file.name,
-                                    "file_type": "mutual_funds",
-                                    "records_count": len(df_mf),
-                                    "status": "success",
-                                }
-                            )
-
-                        if us_stocks_file:
-                            repo.log_upload(
-                                {
-                                    "upload_date": datetime.now(),
-                                    "snapshot_date": snapshot_date,
-                                    "filename": us_stocks_file.name,
-                                    "file_type": "us_stocks",
-                                    "records_count": len(df_us_stocks),
-                                    "status": "success",
-                                }
-                            )
-
-                    st.success(
-                        f"✅ Successfully updated {snapshot_date.strftime('%d %b %Y')} - Added {count} new holdings (Total: {len(final_df)} holdings)"
+        # Save button
+        if st.button("💾 Save to Database", type="primary"):
+            try:
+                with st.spinner("Saving to database..."):
+                    # Use merge method (handles all scenarios: new, replace, merge)
+                    migrated, new_count, final_date = repo.merge_holdings_within_month(
+                        new_date=snapshot_date,
+                        new_holdings_df=combined_df,
+                        upload_types=upload_types,
                     )
-                    st.balloons()
 
-                    # Show summary
-                    st.markdown("### 📊 Summary")
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        st.metric("Total Value", f"₹{summary['total_value']:,.2f}")
-                    with col2:
-                        st.metric(
-                            "Total Invested", f"₹{summary['total_invested']:,.2f}"
+                    # Get all holdings after merge to recalculate summary
+                    all_holdings_df = repo.get_holdings_df(final_date)
+                    summary = calculate_portfolio_summary(all_holdings_df)
+                    nifty, sensex = benchmark_service.get_benchmarks()
+
+                    # Save snapshot with recalculated totals
+                    snapshot_data = {
+                        "snapshot_date": final_date,
+                        "total_value": summary["total_value"],
+                        "stocks_value": summary["stocks_value"],
+                        "mf_value": summary["mf_value"],
+                        "us_stocks_value": summary["us_stocks_value"],
+                        "crypto_value": summary.get("crypto_value", 0.0),
+                        "total_invested": summary["total_invested"],
+                        "total_pl": summary["total_pl"],
+                        "total_pl_pct": summary["total_pl_pct"],
+                        "benchmark_nifty": nifty,
+                        "benchmark_sensex": sensex,
+                    }
+                    repo.save_snapshot(snapshot_data)
+
+                    # Log uploads
+                    if stocks_file:
+                        repo.log_upload(
+                            {
+                                "upload_date": datetime.now(),
+                                "snapshot_date": final_date,
+                                "filename": stocks_file.name,
+                                "file_type": "stocks",
+                                "records_count": len(df_stocks),
+                                "status": "success",
+                            }
                         )
-                    with col3:
-                        st.metric(
-                            "Total P&L",
-                            f"₹{summary['total_pl']:,.2f}",
-                            f"{summary['total_pl_pct']:.2f}%",
+
+                    if mf_file:
+                        repo.log_upload(
+                            {
+                                "upload_date": datetime.now(),
+                                "snapshot_date": final_date,
+                                "filename": mf_file.name,
+                                "file_type": "mutual_funds",
+                                "records_count": len(df_mf),
+                                "status": "success",
+                            }
                         )
 
-                except Exception as e:
-                    st.error(f"Error replacing data: {str(e)}")
-                    import traceback
+                    if us_stocks_file:
+                        repo.log_upload(
+                            {
+                                "upload_date": datetime.now(),
+                                "snapshot_date": final_date,
+                                "filename": us_stocks_file.name,
+                                "file_type": "us_stocks",
+                                "records_count": len(df_us_stocks),
+                                "status": "success",
+                            }
+                        )
 
-                    st.code(traceback.format_exc())
-        else:
-            # Save button for new data
-            if st.button("💾 Save to Database", type="primary"):
-                try:
-                    with st.spinner("Saving to database..."):
-                        # Save holdings
-                        count = repo.save_holdings(combined_df, snapshot_date)
-
-                        # Calculate and save snapshot
-                        summary = calculate_portfolio_summary(combined_df)
-                        nifty, sensex = benchmark_service.get_benchmarks()
-
-                        snapshot_data = {
-                            "snapshot_date": snapshot_date,
-                            "total_value": summary["total_value"],
-                            "stocks_value": summary["stocks_value"],
-                            "mf_value": summary["mf_value"],
-                            "us_stocks_value": summary["us_stocks_value"],
-                            "total_invested": summary["total_invested"],
-                            "total_pl": summary["total_pl"],
-                            "total_pl_pct": summary["total_pl_pct"],
-                            "benchmark_nifty": nifty,
-                            "benchmark_sensex": sensex,
-                        }
-                        repo.save_snapshot(snapshot_data)
-
-                        # Log uploads
-                        if stocks_file:
-                            repo.log_upload(
-                                {
-                                    "upload_date": datetime.now(),
-                                    "snapshot_date": snapshot_date,
-                                    "filename": stocks_file.name,
-                                    "file_type": "stocks",
-                                    "records_count": len(df_stocks),
-                                    "status": "success",
-                                }
-                            )
-
-                        if mf_file:
-                            repo.log_upload(
-                                {
-                                    "upload_date": datetime.now(),
-                                    "snapshot_date": snapshot_date,
-                                    "filename": mf_file.name,
-                                    "file_type": "mutual_funds",
-                                    "records_count": len(df_mf),
-                                    "status": "success",
-                                }
-                            )
-
-                        if us_stocks_file:
-                            repo.log_upload(
-                                {
-                                    "upload_date": datetime.now(),
-                                    "snapshot_date": snapshot_date,
-                                    "filename": us_stocks_file.name,
-                                    "file_type": "us_stocks",
-                                    "records_count": len(df_us_stocks),
-                                    "status": "success",
-                                }
-                            )
-
+                # Build success message
+                if migrated > 0:
                     st.success(
-                        f"✅ Successfully saved {count} holdings for {snapshot_date.strftime('%d %b %Y')}"
+                        f"✅ Successfully merged data for {final_date.strftime('%d %b %Y')} - "
+                        f"Added {new_count} new holdings, preserved {migrated} existing holdings "
+                        f"(Total: {len(all_holdings_df)} holdings)"
                     )
-                    st.balloons()
+                else:
+                    st.success(
+                        f"✅ Successfully saved {new_count} holdings for {final_date.strftime('%d %b %Y')} "
+                        f"(Total: {len(all_holdings_df)} holdings)"
+                    )
+                st.balloons()
 
-                    # Show summary
-                    st.markdown("### 📊 Summary")
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        st.metric("Total Value", f"₹{summary['total_value']:,.2f}")
-                    with col2:
-                        st.metric(
-                            "Total Invested", f"₹{summary['total_invested']:,.2f}"
-                        )
-                    with col3:
-                        st.metric(
-                            "Total P&L",
-                            f"₹{summary['total_pl']:,.2f}",
-                            f"{summary['total_pl_pct']:.2f}%",
-                        )
+                # Show summary
+                st.markdown("### 📊 Summary")
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Total Value", f"₹{summary['total_value']:,.2f}")
+                with col2:
+                    st.metric(
+                        "Total Invested", f"₹{summary['total_invested']:,.2f}"
+                    )
+                with col3:
+                    st.metric(
+                        "Total P&L",
+                        f"₹{summary['total_pl']:,.2f}",
+                        f"{summary['total_pl_pct']:.2f}%",
+                    )
 
-                except Exception as e:
-                    st.error(f"Error saving to database: {str(e)}")
-                    import traceback
+            except Exception as e:
+                st.error(f"Error saving to database: {str(e)}")
+                import traceback
 
-                    st.code(traceback.format_exc())
+                st.code(traceback.format_exc())
 
 st.markdown("---")
 

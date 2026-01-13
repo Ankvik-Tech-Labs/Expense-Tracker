@@ -6,7 +6,7 @@ This module provides data access methods for the investment tracker.
 
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 
 import pandas as pd
 from sqlalchemy import create_engine, select, func, text, inspect
@@ -109,7 +109,7 @@ class PortfolioRepository:
             session.commit()
             return len(holdings)
 
-    def get_holdings(self, snapshot_date: Optional[datetime] = None) -> List[Holding]:
+    def get_holdings(self, snapshot_date: Optional[datetime] = None) -> list[Holding]:
         """
         Get holdings for a specific date or latest per type.
 
@@ -191,7 +191,7 @@ class PortfolioRepository:
             session.add(snapshot)
             session.commit()
 
-    def get_snapshots(self, limit: int = 12) -> List[Snapshot]:
+    def get_snapshots(self, limit: int = 12) -> list[Snapshot]:
         """
         Get recent snapshots.
 
@@ -252,7 +252,7 @@ class PortfolioRepository:
             session.add(upload_log)
             session.commit()
 
-    def get_upload_logs(self, limit: int = 20) -> List[UploadLog]:
+    def get_upload_logs(self, limit: int = 20) -> list[UploadLog]:
         """
         Get recent upload logs.
 
@@ -413,14 +413,14 @@ class PortfolioRepository:
             session.refresh(wallet)
             return wallet
 
-    def get_wallets(self, active_only: bool = True) -> List[WalletAddress]:
+    def get_wallets(self, active_only: bool = True) -> list[WalletAddress]:
         """
         Get all wallet addresses.
 
         :param active_only: If True, only return active wallets.
         :type active_only: bool
         :returns: List of WalletAddress objects.
-        :rtype: List[WalletAddress]
+        :rtype: list[WalletAddress]
         """
         with self.get_session() as session:
             stmt = select(WalletAddress)
@@ -492,3 +492,131 @@ class PortfolioRepository:
             if wallet:
                 wallet.last_scanned = datetime.utcnow()
                 session.commit()
+
+    # Same-month snapshot merging methods
+    def find_snapshot_in_month(
+        self, target_date: datetime
+    ) -> Optional[tuple[datetime, Snapshot]]:
+        """
+        Find existing snapshot within same calendar month as target_date.
+
+        :param target_date: Date to check for existing snapshot in same month.
+        :type target_date: datetime
+        :returns: Tuple of (snapshot_date, Snapshot) if found, None otherwise.
+        :rtype: Optional[tuple[datetime, Snapshot]]
+        """
+        with self.get_session() as session:
+            first_of_month = target_date.replace(
+                day=1, hour=0, minute=0, second=0, microsecond=0
+            )
+            if target_date.month == 12:
+                first_of_next_month = first_of_month.replace(
+                    year=target_date.year + 1, month=1
+                )
+            else:
+                first_of_next_month = first_of_month.replace(
+                    month=target_date.month + 1
+                )
+
+            stmt = (
+                select(Snapshot)
+                .where(
+                    Snapshot.snapshot_date >= first_of_month,
+                    Snapshot.snapshot_date < first_of_next_month,
+                )
+                .order_by(Snapshot.snapshot_date.desc())
+            )
+
+            snapshot = session.execute(stmt).scalar()
+            if snapshot:
+                return (snapshot.snapshot_date, snapshot)
+            return None
+
+    def migrate_holdings_to_new_date(
+        self,
+        old_date: datetime,
+        new_date: datetime,
+        exclude_types: Optional[list[str]] = None,
+    ) -> int:
+        """
+        Move holdings from old date to new date, excluding specified types.
+
+        :param old_date: Original snapshot date.
+        :type old_date: datetime
+        :param new_date: New snapshot date to migrate holdings to.
+        :type new_date: datetime
+        :param exclude_types: List of holding types to exclude (delete instead of migrate).
+        :type exclude_types: Optional[list[str]]
+        :returns: Number of holdings migrated.
+        :rtype: int
+        """
+        with self.get_session() as session:
+            stmt = select(Holding).where(Holding.snapshot_date == old_date)
+            holdings = list(session.execute(stmt).scalars().all())
+
+            migrated_count = 0
+            for holding in holdings:
+                if exclude_types and holding.type.value in exclude_types:
+                    session.delete(holding)
+                else:
+                    holding.snapshot_date = new_date
+                    migrated_count += 1
+
+            session.commit()
+            return migrated_count
+
+    def merge_holdings_within_month(
+        self,
+        new_date: datetime,
+        new_holdings_df: pd.DataFrame,
+        upload_types: list[str],
+    ) -> tuple[int, int, datetime]:
+        """
+        Merge new holdings with existing snapshot in same month.
+
+        If an existing snapshot exists in the same calendar month, this method:
+        1. Uses the later date as the final date
+        2. Migrates non-uploaded holdings to the new date
+        3. Deletes holdings of the uploaded types
+        4. Saves new holdings
+
+        :param new_date: Date of the new upload.
+        :type new_date: datetime
+        :param new_holdings_df: DataFrame with new holdings to save.
+        :type new_holdings_df: pd.DataFrame
+        :param upload_types: List of holding types being uploaded (e.g., ['stock', 'mutual_fund']).
+        :type upload_types: list[str]
+        :returns: Tuple of (migrated_count, new_count, final_date).
+        :rtype: tuple[int, int, datetime]
+        """
+        existing = self.find_snapshot_in_month(new_date)
+
+        if existing:
+            old_date, _ = existing
+            final_date = max(old_date, new_date)
+
+            if old_date != final_date:
+                # Old date is earlier - migrate holdings to new date
+                migrated = self.migrate_holdings_to_new_date(
+                    old_date, final_date, exclude_types=upload_types
+                )
+                self.delete_snapshot(old_date)
+            else:
+                # Same date or old date is later - just delete holdings of uploaded types
+                self.delete_holdings_by_type(old_date, upload_types)
+                migrated = 0
+                # Delete snapshot record to allow recalculation
+                with self.get_session() as session:
+                    stmt = select(Snapshot).where(
+                        Snapshot.snapshot_date == old_date
+                    )
+                    snapshot = session.execute(stmt).scalar()
+                    if snapshot:
+                        session.delete(snapshot)
+                        session.commit()
+        else:
+            final_date = new_date
+            migrated = 0
+
+        new_count = self.save_holdings(new_holdings_df, final_date)
+        return (migrated, new_count, final_date)

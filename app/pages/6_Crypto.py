@@ -3,10 +3,8 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-from sqlalchemy import select
 
 from src.database.repository import PortfolioRepository
-from src.database.models import Snapshot
 from src.services.crypto import CryptoService
 from src.services.portfolio import calculate_portfolio_summary
 from src.services.benchmarks import BenchmarkService
@@ -235,6 +233,23 @@ if "crypto_df" in st.session_state:
             hour=0, minute=0, second=0, microsecond=0
         )
 
+        # Check for existing snapshot in the same month
+        existing_in_month = repo.find_snapshot_in_month(snapshot_date)
+        same_date_exists = repo.snapshot_exists(snapshot_date)
+
+        # Show appropriate message based on existing data
+        if same_date_exists:
+            st.warning(
+                f"⚠️ Crypto data for {snapshot_date.strftime('%d %b %Y')} already exists! "
+                f"Saving will replace existing crypto positions."
+            )
+        elif existing_in_month:
+            old_date, _ = existing_in_month
+            st.info(
+                f"📅 Found existing snapshot for {old_date.strftime('%d %b %Y')} "
+                f"in the same month. Data will be merged into {snapshot_date.strftime('%d %b %Y')}."
+            )
+
         if st.button("💾 Save Crypto Positions", type="primary"):
             try:
                 with st.spinner("Saving crypto positions..."):
@@ -255,44 +270,26 @@ if "crypto_df" in st.session_state:
                         ]
                     ].copy()
 
-                    # Check if snapshot exists
-                    snapshot_exists = repo.snapshot_exists(snapshot_date)
+                    # Use merge method (handles all scenarios: new, replace, merge)
+                    migrated, new_count, final_date = repo.merge_holdings_within_month(
+                        new_date=snapshot_date,
+                        new_holdings_df=save_df,
+                        upload_types=["crypto"],
+                    )
 
-                    if snapshot_exists:
-                        # Delete existing crypto holdings for this date
-                        deleted = repo.delete_holdings_by_type(
-                            snapshot_date, ["crypto"]
-                        )
-                        st.info(f"Replaced {deleted} existing crypto positions")
-
-                    # Save new crypto holdings
-                    count = repo.save_holdings(save_df, snapshot_date)
-
-                    # Get all holdings for this date to recalculate summary
-                    all_holdings_df = repo.get_holdings_df(snapshot_date)
+                    # Get all holdings after merge to recalculate summary
+                    all_holdings_df = repo.get_holdings_df(final_date)
                     summary = calculate_portfolio_summary(all_holdings_df)
                     nifty, sensex = benchmark_service.get_benchmarks()
 
-                    # Update or create snapshot
-                    if snapshot_exists:
-                        # Delete old snapshot record
-                        with repo.get_session() as session:
-                            stmt = select(Snapshot).where(
-                                Snapshot.snapshot_date == snapshot_date
-                            )
-                            snapshot = session.execute(stmt).scalar()
-                            if snapshot:
-                                session.delete(snapshot)
-                                session.commit()
-
-                    # Save new snapshot
+                    # Save snapshot with recalculated totals
                     snapshot_data = {
-                        "snapshot_date": snapshot_date,
+                        "snapshot_date": final_date,
                         "total_value": summary["total_value"],
                         "stocks_value": summary["stocks_value"],
                         "mf_value": summary["mf_value"],
                         "us_stocks_value": summary["us_stocks_value"],
-                        "crypto_value": summary["crypto_value"],
+                        "crypto_value": summary.get("crypto_value", 0.0),
                         "total_invested": summary["total_invested"],
                         "total_pl": summary["total_pl"],
                         "total_pl_pct": summary["total_pl_pct"],
@@ -305,17 +302,26 @@ if "crypto_df" in st.session_state:
                     repo.log_upload(
                         {
                             "upload_date": datetime.now(),
-                            "snapshot_date": snapshot_date,
+                            "snapshot_date": final_date,
                             "filename": f"crypto_scan_{st.session_state['crypto_wallet_address'][:10]}",
                             "file_type": "crypto",
-                            "records_count": count,
+                            "records_count": new_count,
                             "status": "success",
                         }
                     )
 
-                st.success(
-                    f"✅ Saved {count} crypto positions for {snapshot_date.strftime('%d %b %Y')}"
-                )
+                # Build success message
+                if migrated > 0:
+                    st.success(
+                        f"✅ Successfully merged crypto data for {final_date.strftime('%d %b %Y')} - "
+                        f"Added {new_count} crypto positions, preserved {migrated} existing holdings "
+                        f"(Total: {len(all_holdings_df)} holdings)"
+                    )
+                else:
+                    st.success(
+                        f"✅ Saved {new_count} crypto positions for {final_date.strftime('%d %b %Y')} "
+                        f"(Total: {len(all_holdings_df)} holdings)"
+                    )
                 st.balloons()
 
                 # Clear session state
