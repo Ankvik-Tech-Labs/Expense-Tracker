@@ -77,8 +77,8 @@ class CryptoService:
         """
         Fetch all DeFi positions for a wallet address across multiple chains.
 
-        Uses parallel scanning with ThreadPoolExecutor for performance,
-        matching the CLI's approach.
+        Scans each chain with a dedicated RPC provider, matching the CLI's
+        per-chain approach.
 
         :param wallet_address: Ethereum wallet address.
         :type wallet_address: str
@@ -94,78 +94,68 @@ class CryptoService:
 
         self._lazy_import()
 
-        # Use the aggregator's optimized get_all_positions which:
-        # 1. First detects active chains (quick check)
-        # 2. Then scans only active chains in parallel using ThreadPoolExecutor
-        # This is the same approach the CLI uses for 2-3 min scans
-
-        # Initialize fallback pricing
+        target_chains = chains or self._get_all_supported_chains()
+        all_positions = []
+        rpc_providers = {}
         defillama_pricing = self._DeFiLlamaPricing()
 
-        # Create a single RPC provider for the initial scan
-        # The aggregator will handle per-chain providers internally
-        rpc_provider = self._ApeRPCProvider(chain="ethereum")
-        rpc_provider.connect()
-
         try:
-            # Create Chainlink pricing with DeFiLlama fallback
-            pricing = self._ChainlinkPricing(
-                rpc_provider=rpc_provider,
-                fallback_pricing=defillama_pricing,
-            )
+            for chain_name in target_chains:
+                try:
+                    rpc_provider = self._ApeRPCProvider(chain=chain_name)
+                    rpc_provider.connect()
+                    rpc_providers[chain_name] = rpc_provider
 
-            # Create scanner and aggregator
-            scanner = self._ChainScanner(rpc_provider=rpc_provider)
-            aggregator = self._PositionAggregator(
-                scanner=scanner,
-                pricing_service=pricing,
-                rpc_provider=rpc_provider,
-            )
-
-            # Use get_all_positions which handles parallel chain scanning internally
-            # This method:
-            # 1. Calls scan_all_chains() to detect which chains have activity
-            # 2. Filters to only active chains
-            # 3. Uses ThreadPoolExecutor (max 4 workers) to scan chains in parallel
-            portfolio = aggregator.get_all_positions(wallet_address)
-
-            # If specific chains were requested, filter the results
-            if chains:
-                filtered_positions = [
-                    p for p in portfolio.positions if p.chain in chains
-                ]
-                # Recalculate totals for filtered positions
-                total_usd = sum(
-                    (p.usd_value or Decimal("0") for p in filtered_positions),
-                    Decimal("0"),
-                )
-                by_chain = {}
-                by_protocol = {}
-                for position in filtered_positions:
-                    pos_value = position.usd_value or Decimal("0")
-                    by_chain[position.chain] = (
-                        by_chain.get(position.chain, Decimal("0")) + pos_value
-                    )
-                    by_protocol[position.protocol] = (
-                        by_protocol.get(position.protocol, Decimal("0")) + pos_value
+                    pricing = self._ChainlinkPricing(
+                        rpc_provider=rpc_provider,
+                        fallback_pricing=defillama_pricing,
                     )
 
-                return self._PortfolioSummary(
-                    address=wallet_address,
-                    positions=filtered_positions,
-                    total_usd_value=total_usd,
-                    by_chain=by_chain,
-                    by_protocol=by_protocol,
+                    scanner = self._ChainScanner(rpc_provider=rpc_provider)
+                    aggregator = self._PositionAggregator(
+                        scanner=scanner,
+                        pricing_service=pricing,
+                        rpc_provider=rpc_provider,
+                    )
+
+                    positions = aggregator.get_positions_for_chain(
+                        wallet_address, chain_name
+                    )
+                    all_positions.extend(positions)
+                except Exception:
+                    # Continue with other chains if one fails
+                    continue
+
+            # Build portfolio summary
+            total_usd = sum(
+                (p.usd_value or Decimal("0") for p in all_positions),
+                Decimal("0"),
+            )
+            by_chain: dict = {}
+            by_protocol: dict = {}
+            for position in all_positions:
+                pos_value = position.usd_value or Decimal("0")
+                by_chain[position.chain] = (
+                    by_chain.get(position.chain, Decimal("0")) + pos_value
+                )
+                by_protocol[position.protocol] = (
+                    by_protocol.get(position.protocol, Decimal("0")) + pos_value
                 )
 
-            return portfolio
+            return self._PortfolioSummary(
+                address=wallet_address,
+                positions=all_positions,
+                total_usd_value=total_usd,
+                by_chain=by_chain,
+                by_protocol=by_protocol,
+            )
 
         finally:
-            # Cleanup
-            try:
-                rpc_provider.disconnect()
-            except Exception:
-                pass
+            for provider in rpc_providers.values():
+                try:
+                    provider.disconnect()
+                except Exception:
+                    pass
             try:
                 defillama_pricing.close()
             except Exception:

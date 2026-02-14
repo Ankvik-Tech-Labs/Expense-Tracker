@@ -11,6 +11,9 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - PYTHONPATH=/app
+      # env_file doesn't expand $VAR references, so map explicitly
+      - WEB3_INFURA_PROJECT_ID=${INFURA_API_KEY}
+      - ETHERSCAN_API_KEY=${ETHERSCAN_API_KEY}
     env_file:
       - .env
     restart: unless-stopped

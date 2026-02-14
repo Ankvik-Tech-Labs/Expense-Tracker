@@ -5,6 +5,8 @@ plugins:
   - name: infura      # Infura RPC provider
   - name: etherscan   # For contract ABIs
   - name: base        # Base chain support
+  - name: arbitrum    # Arbitrum chain support
+  - name: optimism    # Optimism chain support
 
 default_ecosystem: ethereum
 

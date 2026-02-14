@@ -173,6 +173,20 @@ wheels = [
 ]
 
 [[package]]
+name = "ape-arbitrum"
+version = "0.8.6"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "eth-ape" },
+    { name = "eth-pydantic-types" },
+    { name = "ethpm-types" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/4a/df/9eaa0567a235754f19a135ef2e15c544f519579fc6320cfd46b598bc390e/ape_arbitrum-0.8.6.tar.gz", hash = "sha256:5fd02614ff34e1408192bd05fa33f800b89b67c04d17eeda639f3ec4a378984b", size = 19020, upload-time = "2026-02-03T01:36:32.413Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/19/49/865ccd277f0498afa7cb5b624c305f074026f55ca1472ccdcd85631c1d61/ape_arbitrum-0.8.6-py3-none-any.whl", hash = "sha256:648528d164f9b26191d8a8352ec4c6fabd6748e1e61fbd8e513c4e2f782a4e86", size = 10627, upload-time = "2026-02-03T01:36:31.134Z" },
+]
+
+[[package]]
 name = "ape-base"
 version = "0.8.2"
 source = { registry = "https://pypi.org/simple" }
@@ -754,12 +768,14 @@ toml = [
 
 [[package]]
 name = "crypto-portfolio-tracker"
-version = "0.0.1"
-source = { git = "https://github.com/Ankvik-Tech-Labs/Crypto-portfolio-tracker.git#fab671aa98e7be9c91349ef4fe82431129acd785" }
+version = "0.0.2"
+source = { git = "https://github.com/Ankvik-Tech-Labs/Crypto-portfolio-tracker.git#19845561cafafa3e18805254abdc0c01778b440c" }
 dependencies = [
+    { name = "ape-arbitrum" },
     { name = "ape-base" },
     { name = "ape-etherscan" },
     { name = "ape-infura" },
+    { name = "ape-optimism" },
     { name = "cchecksum" },
     { name = "eth-ape" },
     { name = "httpx" },
@@ -795,7 +811,7 @@ name = "cytoolz"
 version = "1.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "toolz" },
+    { name = "toolz", marker = "implementation_name == 'cpython'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/bd/d4/16916f3dc20a3f5455b63c35dcb260b3716f59ce27a93586804e70e431d5/cytoolz-1.1.0.tar.gz", hash = "sha256:13a7bf254c3c0d28b12e2290b82aed0f0977a4c2a2bf84854fcdc7796a29f3b0", size = 642510, upload-time = "2025-10-19T00:44:56.174Z" }
 wheels = [
