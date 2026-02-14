@@ -1,6 +1,7 @@
 services:
   investment-tracker:
     build: .
+    platform: linux/amd64
     ports:
       - "8501:8501"
     volumes:

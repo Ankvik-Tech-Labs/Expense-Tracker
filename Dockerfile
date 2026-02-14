@@ -20,11 +20,10 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 COPY pyproject.toml .
 COPY uv.lock .
 
-# Workaround: cchecksum's setup.py has a bug that expects requirements.txt
-RUN touch requirements.txt
-
-# Install dependencies
-RUN uv sync --frozen
+# Install dependencies (include crypto extra for crypto-portfolio-tracker)
+# Note: cchecksum has no aarch64 wheel and a broken sdist, so the image must
+# be built for linux/amd64 (set via docker-compose.yml or --platform flag).
+RUN uv sync --frozen --extra crypto
 
 # Copy source code
 COPY src/ src/
